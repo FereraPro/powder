@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Powder">
+<meta name="theme-color" content="#0a1430">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-144.png">
+<title>Powder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,800&family=Barlow:wght@500;600&display=swap">
+<style>
+/* Layout: one full-bleed game canvas; a loading card floats over it until the mountain is ready. */
+:root {
+  --night: #0a1430;
+  --glacier: #e9f1fb;
+  --mist: #9fb4d4;
+  --ember: #ff5b1f;
+  --track: rgba(233, 241, 251, 0.16);
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; height: 100dvh; margin: 0; }
+body {
+  background: var(--night);
+  color: var(--glacier);
+  font-family: var(--body);
+  overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+#canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+}
+#loader {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding-inline: 16px;
+  background:
+    linear-gradient(180deg, rgba(10, 20, 48, 0.15) 0%, rgba(10, 20, 48, 0.25) 45%, rgba(10, 20, 48, 0.92) 100%),
+    url("loader.jpg") center / cover no-repeat,
+    linear-gradient(180deg, #13245a 0%, var(--night) 70%);
+  align-items: end;
+  padding-block: 0 9vh;
+}
+.card {
+  display: grid;
+  gap: 14px;
+  width: min(26rem, 100%);
+}
+.brand {
+  margin: 0;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: clamp(3rem, 12vw, 5rem);
+  line-height: 0.9;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+}
+.tag { margin: 0; color: var(--mist); font-size: 1rem; }
+.bar {
+  height: 8px;
+  border-radius: 99px;
+  background: var(--track);
+  overflow: hidden;
+}
+.bar > i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--ember);
+  border-radius: inherit;
+  transition: width 0.25s linear;
+}
+.status {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--mist);
+}
+.status.error { color: var(--ember); }
+#turn {
+  position: fixed;
+  inset: 0;
+  display: none;
+  place-items: center;
+  padding-inline: 16px;
+  text-align: center;
+  background: var(--night);
+  z-index: 5;
+}
+#turn p { margin: 0; max-width: 18rem; font-size: 1.1rem; line-height: 1.4; }
+#turn .phone {
+  width: 44px; height: 76px; margin: 0 auto 18px;
+  border: 3px solid var(--glacier); border-radius: 10px;
+  animation: tilt 2.4s ease-in-out infinite;
+}
+@keyframes tilt { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+@media (prefers-reduced-motion: reduce) { #turn .phone { animation: none; transform: rotate(-90deg); } .bar > i { transition: none; } }
+@media (orientation: portrait) and (max-width: 820px) { #turn { display: grid; } }
+[hidden] { display: none !important; }
+.hint { margin: 0; font-size: 0.9rem; color: var(--glacier); }
+.hint b { color: var(--ember); }
+</style>
+</head>
+<body>
+
+<canvas id="canvas" tabindex="0">Your browser can't run this game.</canvas>
+
+<div id="loader">
+  <div class="card">
+    <h1 class="brand">POWDER</h1>
+    <p class="tag">Steep lines, deep snow, real tricks.</p>
+    <div class="bar" role="progressbar" aria-label="Loading the mountain" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="fill"></i></div>
+    <p class="status" id="status">Loading the mountain…</p>
+    <p class="hint" id="hint" hidden>Full screen: tap <b>Share</b> then <b>Add to Home Screen</b>, and open Powder from there.</p>
+  </div>
+</div>
+
+<div id="turn" aria-live="polite">
+  <div>
+    <div class="phone" aria-hidden="true"></div>
+    <p>Turn your phone sideways to ride.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  // The page host caps file size, so the engine and game data ship in parts.
+  var PARTS = {
+    'index.wasm': ['wasm_part_0.wasm', 'wasm_part_1.wasm', 'wasm_part_2.wasm'],
+    'index.pck': ['pck_part_0.wasm', 'pck_part_1.wasm', 'pck_part_2.wasm', 'pck_part_3.wasm', 'pck_part_4.wasm', 'pck_part_5.wasm', 'pck_part_6.wasm', 'pck_part_7.wasm', 'pck_part_8.wasm', 'pck_part_9.wasm']
+  };
+  var BUILD = '88';
+  var SIZES = { 'index.pck': 139675124, 'index.wasm': 39514754 };
+  var TOTAL = SIZES['index.pck'] + SIZES['index.wasm'];
+  var loaded = 0;
+  var fill = document.getElementById('fill');
+  var bar = fill.parentNode;
+  var status = document.getElementById('status');
+
+  function show() {
+    var pct = Math.min(100, Math.round(loaded / TOTAL * 100));
+    fill.style.width = pct + '%';
+    bar.setAttribute('aria-valuenow', String(pct));
+    status.textContent = 'Loading the mountain… ' + Math.round(loaded / 1e6) + ' of ' + Math.round(TOTAL / 1e6) + ' MB';
+  }
+
+  var realFetch = window.fetch.bind(window);
+
+  function getPart(url) {
+    return realFetch(url).then(function (r) {
+      if (!r.ok) throw new Error('Could not download ' + url + ' (' + r.status + ')');
+      if (!r.body || !r.body.getReader) {
+        return r.blob().then(function (b) { loaded += b.size; show(); return b; });
+      }
+      var reader = r.body.getReader();
+      var chunks = [];
+      function pump() {
+        return reader.read().then(function (res) {
+          if (res.done) return new Blob(chunks);
+          chunks.push(res.value);
+          loaded += res.value.byteLength;
+          show();
+          return pump();
+        });
+      }
+      return pump();
+    });
+  }
+
+  window.fetch = function (input, init) {
+    var url = typeof input === 'string' ? input : (input && input.url) || '';
+    var name = url.split('?')[0].split('#')[0].split('/').pop();
+    if (PARTS[name]) {
+      return Promise.all(PARTS[name].map(function (u) { return getPart(u + '?v=' + BUILD); })).then(function (blobs) {
+        var type = name.slice(-5) === '.wasm' ? 'application/wasm' : 'application/octet-stream';
+        var whole = new Blob(blobs, { type: type });
+        return new Response(whole, { status: 200, headers: { 'Content-Type': type, 'Content-Length': String(whole.size) } });
+      });
+    }
+    return realFetch(input, init);
+  };
+
+  var ios = /iPhone|iPod/.test(navigator.userAgent);
+  if (ios && !navigator.standalone) document.getElementById('hint').hidden = false;
+
+  window.__powderFail = function (msg) {
+    status.textContent = msg;
+    status.classList.add('error');
+  };
+  window.__powderReady = function () {
+    document.getElementById('loader').hidden = true;
+  };
+})();
+</script>
+<script src="index.js"></script>
+<script>
+(function () {
+  var config = {
+    args: [],
+    canvasResizePolicy: 2,
+    ensureCrossOriginIsolationHeaders: false,
+    executable: 'index',
+    experimentalVK: false,
+    fileSizes: { 'index.pck': 139675124, 'index.wasm': 39514754 },
+    focusCanvas: true,
+    gdextensionLibs: []
+  };
+  if (typeof Engine === 'undefined') {
+    window.__powderFail('The game engine did not load. Reload the page to try again.');
+    return;
+  }
+  var missing = Engine.getMissingFeatures({ threads: false });
+  if (missing.length) {
+    window.__powderFail('This browser is missing: ' + missing.join(', ') + '. Try Safari or Chrome.');
+    return;
+  }
+  // Progress: kept in the player's own claude.ai space (db, private per
+  // person), with this browser's storage as a backup for signed-out views.
+  var SAVE_KEY = 'powder_save_v1';
+  var cloudDoc = null;
+  var cloudTimer = 0;
+  var pending = '';
+  window.__powderSaveData = '';
+  try { window.__powderSaveData = localStorage.getItem(SAVE_KEY) || ''; } catch (e) {}
+  window.__powderSave = function (json) {
+    window.__powderSaveData = json;
+    try { localStorage.setItem(SAVE_KEY, json); } catch (e) {}
+    if (!cloudDoc) return;
+    pending = json;
+    clearTimeout(cloudTimer);
+    cloudTimer = setTimeout(function () {
+      cloudDoc.set({ json: pending, at: Date.now() }).catch(function () {});
+    }, 1200);
+  };
+  function withTimeout(p, ms) {
+    return Promise.race([p, new Promise(function (r) { setTimeout(function () { r(null); }, ms); })]);
+  }
+  // Leaderboards: one row per rider ("boards/<id>"), their best in every
+  // mission as a field. Everyone reads; each rider writes only their own row.
+  var board = { db: null, user: null, me: null, ready: null };
+  window.__powderBoards = {};
+  function boardInit() {
+    if (board.ready) return board.ready;
+    if (!window.claude || !window.claude.use) return (board.ready = Promise.resolve(false));
+    board.ready = Promise.all([window.claude.use('db'), window.claude.use('user')]).then(function (c) {
+      board.db = c[0]; board.user = c[1];
+      return board.user ? board.user.id() : null;
+    }).then(function (id) {
+      board.me = id;
+      return !!(board.db && id);
+    }).catch(function () { return false; });
+    return board.ready;
+  }
+  window.__powderBoardPost = function (key, value, lowerIsBetter) {
+    boardInit().then(function (ok) {
+      if (!ok) return;
+      var ref = board.db.doc('boards/' + board.me);
+      return ref.get().then(function (snap) {
+        var d = snap.exists ? snap.data() : {};
+        var cur = d[key];
+        if (typeof cur !== 'number' || (lowerIsBetter ? value < cur : value > cur)) {
+          var patch = {}; patch[key] = value; patch.at = Date.now();
+          return snap.exists ? ref.update(patch) : ref.set(patch);
+        }
+      });
+    }).catch(function () {});
+  };
+  // keys: [[key, lowerIsBetter], ...] -> window.__powderBoards[tag] = JSON
+  window.__powderBoardFetch = function (tag, keysJson) {
+    var keys = JSON.parse(keysJson);
+    boardInit().then(function (ok) {
+      if (!ok) { window.__powderBoards[tag] = JSON.stringify({ offline: true }); return; }
+      return board.db.collection('boards').limit(500).get().then(function (qs) {
+        var rows = qs.docs.map(function (s) { return { id: s.id, d: s.data() || {} }; });
+        var ids = rows.map(function (r) { return r.id; });
+        var names = board.user && board.user.profiles ? board.user.profiles(ids) : Promise.resolve({});
+        return Promise.resolve(names).catch(function () { return {}; }).then(function (ps) {
+          var out = {};
+          keys.forEach(function (k) {
+            var key = k[0], low = k[1];
+            var list = rows.filter(function (r) { return typeof r.d[key] === 'number'; })
+              .map(function (r) {
+                var p = ps && ps[r.id];
+                return { name: (p && p.name) || ('RIDER ' + r.id.slice(-4).toUpperCase()), v: r.d[key], me: r.id === board.me };
+              })
+              .sort(function (a, b) { return low ? a.v - b.v : b.v - a.v; });
+            var rank = 0;
+            for (var i = 0; i < list.length; i++) if (list[i].me) { rank = i + 1; break; }
+            out[key] = { top: list.slice(0, 5), rank: rank, count: list.length };
+          });
+          window.__powderBoards[tag] = JSON.stringify(out);
+        });
+      });
+    }).catch(function () { window.__powderBoards[tag] = JSON.stringify({ offline: true }); });
+  };
+  // Clips and photos: the game hands over a file, the viewer confirms the save.
+  function offerFile(name, blob) {
+    if (!window.claude || !window.claude.use) {
+      // Outside claude.ai: the share sheet (save to Photos on iPhone), else a download.
+      var download = function () {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      };
+      var file = new File([blob], name, { type: blob.type || '' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file] }).catch(function (e) { if (!e || e.name !== 'AbortError') download(); });
+      } else {
+        download();
+      }
+      return;
+    }
+    window.claude.use('downloads').then(function (dl) {
+      if (!dl) return;
+      return dl.save({ filename: name, data: blob });
+    }).catch(function () {});
+  }
+  var recorder = null;
+  var recChunks = [];
+  var recType = '';
+  window.__powderRecStart = function () {
+    var cv = document.getElementById('canvas');
+    if (!cv || !cv.captureStream || typeof MediaRecorder === 'undefined') return false;
+    var types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+    recType = '';
+    for (var i = 0; i < types.length; i++) {
+      if (MediaRecorder.isTypeSupported(types[i])) { recType = types[i]; break; }
+    }
+    try {
+      recorder = new MediaRecorder(cv.captureStream(30), recType ? { mimeType: recType, videoBitsPerSecond: 6000000 } : undefined);
+    } catch (e) { recorder = null; return false; }
+    recChunks = [];
+    recorder.ondataavailable = function (e) { if (e.data && e.data.size) recChunks.push(e.data); };
+    recorder.start(250);
+    return true;
+  };
+  window.__powderRecStop = function (base) {
+    if (!recorder) return;
+    var r = recorder;
+    recorder = null;
+    r.onstop = function () {
+      if (!recChunks.length) return;
+      var ext = (r.mimeType || recType).indexOf('mp4') >= 0 ? '.mp4' : '.webm';
+      offerFile(base + ext, new Blob(recChunks));
+    };
+    r.stop();
+  };
+  window.__powderSavePng = function (b64, name) {
+    var bin = atob(b64);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    offerFile(name, new Blob([bytes]));
+  };
+  function loadCloud() {
+    if (!window.claude || !window.claude.use) return Promise.resolve(null);
+    return Promise.all([window.claude.use('user'), window.claude.use('db')]).then(function (caps) {
+      var user = caps[0], db = caps[1];
+      if (!user || !db) return null;
+      return user.id().then(function (id) {
+        if (!id) return null;
+        cloudDoc = db.doc('data/users/' + id + '/powder');
+        return cloudDoc.get().then(function (snap) {
+          var d = snap.exists ? snap.data() : null;
+          if (d && typeof d.json === 'string' && d.json) {
+            window.__powderSaveData = d.json;
+            try { localStorage.setItem(SAVE_KEY, d.json); } catch (e) {}
+          } else if (window.__powderSaveData) {
+            cloudDoc.set({ json: window.__powderSaveData, at: Date.now() }).catch(function () {});
+          }
+          return true;
+        });
+      });
+    }).catch(function () { return null; });
+  }
+  document.getElementById('status').textContent = 'Loading your progress…';
+  // Full screen: browsers only allow it from a tap, so ask on the first one
+  // (and again after the rider leaves it). Stop asking if the browser refuses.
+  var fsRefused = false;
+  function isFull() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  function goFull() {
+    if (fsRefused || isFull()) return;
+    var el = document.documentElement;
+    var req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!req) { fsRefused = true; return; }
+    try {
+      var p = req.call(el, { navigationUI: 'hide' });
+      var lock = function () {
+        if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {});
+      };
+      if (p && p.then) p.then(lock, function () { fsRefused = true; }); else lock();
+    } catch (e) { fsRefused = true; }
+  }
+  document.addEventListener('touchend', goFull, true);
+  document.addEventListener('click', goFull, true);
+  var engine = new Engine(config);
+  withTimeout(loadCloud(), 5000).then(function () {
+    return engine.startGame({});
+  }).then(function () {
+    window.__powderReady();
+  }, function (err) {
+    window.__powderFail('The game could not start: ' + (err && err.message ? err.message : err) + '. Reload the page to try again.');
+  });
+})();
+</script>
+</body>
+</html>
