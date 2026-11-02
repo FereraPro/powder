@@ -13,24 +13,25 @@
 <link rel="icon" href="icon-144.png">
 <title>Powder</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,800&family=Barlow:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&display=swap">
 <style>
-/* Layout: one full-bleed game canvas; a loading card floats over it until the mountain is ready. */
+/* Layout: one full-bleed game canvas; the boot loader floats over it until the engine starts.
+   Same look as the in-game loading screen (game/ui/transition_screens.gd). */
 :root {
-  --night: #0a1430;
-  --glacier: #e9f1fb;
-  --mist: #9fb4d4;
+  --night: #070f24;
+  --glacier: #eaf4ff;
+  --mist: rgba(234, 244, 255, 0.62);
+  --ice: #7fd0ff;
   --ember: #ff5b1f;
-  --track: rgba(233, 241, 251, 0.16);
+  --track: rgba(255, 255, 255, 0.2);
   --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
-  --body: "Barlow", system-ui, -apple-system, sans-serif;
   color-scheme: dark;
 }
 html, body { height: 100%; height: 100dvh; margin: 0; }
 body {
   background: var(--night);
   color: var(--glacier);
-  font-family: var(--body);
+  font-family: var(--display);
   overflow: hidden;
   touch-action: none;
   -webkit-user-select: none;
@@ -48,35 +49,53 @@ body {
 #loader {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
-  padding-inline: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 max(16px, 4.5vw) max(18px, 4.5vh);
+  padding-left: max(16px, 4.5vw, env(safe-area-inset-left));
+  padding-right: max(16px, 4.5vw, env(safe-area-inset-right));
   background:
-    linear-gradient(180deg, rgba(10, 20, 48, 0.15) 0%, rgba(10, 20, 48, 0.25) 45%, rgba(10, 20, 48, 0.92) 100%),
+    linear-gradient(180deg, rgba(7, 15, 36, 0.5) 0%, rgba(7, 15, 36, 0) 20%, rgba(7, 15, 36, 0) 45%, rgba(7, 15, 36, 0.95) 100%),
     url("loader.jpg") center / cover no-repeat,
     linear-gradient(180deg, #13245a 0%, var(--night) 70%);
-  align-items: end;
-  padding-block: 0 9vh;
 }
-.card {
-  display: grid;
-  gap: 14px;
-  width: min(26rem, 100%);
+.mark {
+  position: absolute;
+  top: max(20px, 5vh);
+  left: max(16px, 4.5vw, env(safe-area-inset-left));
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.45em;
 }
+.card { display: grid; gap: 6px; width: 100%; }
 .brand {
   margin: 0;
-  font-family: var(--display);
-  font-style: italic;
-  font-weight: 800;
-  font-size: clamp(3rem, 12vw, 5rem);
+  font-weight: 600;
+  font-size: clamp(3.2rem, 11vh, 7rem);
   line-height: 0.9;
   letter-spacing: 0.01em;
-  text-wrap: balance;
 }
-.tag { margin: 0; color: var(--mist); font-size: 1rem; }
+.tag {
+  margin: 0 0 clamp(14px, 5vh, 40px);
+  font-weight: 500;
+  font-size: 1.05rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+}
+.status {
+  margin: 0;
+  font-weight: 500;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.status.error { color: var(--ember); }
+.row { display: flex; align-items: center; gap: 28px; }
 .bar {
-  height: 8px;
-  border-radius: 99px;
+  flex: 1;
+  height: 4px;
+  border-radius: 3px;
   background: var(--track);
   overflow: hidden;
 }
@@ -84,18 +103,11 @@ body {
   display: block;
   height: 100%;
   width: 0%;
-  background: var(--ember);
+  background: var(--ice);
   border-radius: inherit;
   transition: width 0.25s linear;
 }
-.status {
-  margin: 0;
-  font-weight: 600;
-  font-size: 0.95rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--mist);
-}
-.status.error { color: var(--ember); }
+.pct { min-width: 3em; text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
 #turn {
   position: fixed;
   inset: 0;
@@ -106,7 +118,7 @@ body {
   background: var(--night);
   z-index: 5;
 }
-#turn p { margin: 0; max-width: 18rem; font-size: 1.1rem; line-height: 1.4; }
+#turn p { margin: 0; max-width: 18rem; font-size: 1.2rem; line-height: 1.4; }
 #turn .phone {
   width: 44px; height: 76px; margin: 0 auto 18px;
   border: 3px solid var(--glacier); border-radius: 10px;
@@ -116,8 +128,8 @@ body {
 @media (prefers-reduced-motion: reduce) { #turn .phone { animation: none; transform: rotate(-90deg); } .bar > i { transition: none; } }
 @media (orientation: portrait) and (max-width: 820px) { #turn { display: grid; } }
 [hidden] { display: none !important; }
-.hint { margin: 0; font-size: 0.9rem; color: var(--glacier); }
-.hint b { color: var(--ember); }
+.hint { margin: 6px 0 0; font-size: 0.95rem; letter-spacing: 0.12em; color: var(--mist); }
+.hint b { color: var(--ice); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -125,11 +137,15 @@ body {
 <canvas id="canvas" tabindex="0">Your browser can't run this game.</canvas>
 
 <div id="loader">
+  <p class="mark">POWDER.</p>
   <div class="card">
     <h1 class="brand">POWDER</h1>
     <p class="tag">Steep lines, deep snow, real tricks.</p>
-    <div class="bar" role="progressbar" aria-label="Loading the mountain" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="fill"></i></div>
     <p class="status" id="status">Loading the mountain…</p>
+    <div class="row">
+      <div class="bar" role="progressbar" aria-label="Loading the mountain" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="fill"></i></div>
+      <span class="pct" id="pct" aria-hidden="true">0%</span>
+    </div>
     <p class="hint" id="hint" hidden>Full screen: tap <b>Share</b> then <b>Add to Home Screen</b>, and open Powder from there.</p>
   </div>
 </div>
@@ -146,10 +162,10 @@ body {
   // The page host caps file size, so the engine and game data ship in parts.
   var PARTS = {
     'index.wasm': ['wasm_part_0.wasm', 'wasm_part_1.wasm', 'wasm_part_2.wasm'],
-    'index.pck': ['pck_part_0.wasm', 'pck_part_1.wasm', 'pck_part_2.wasm', 'pck_part_3.wasm', 'pck_part_4.wasm', 'pck_part_5.wasm', 'pck_part_6.wasm', 'pck_part_7.wasm', 'pck_part_8.wasm', 'pck_part_9.wasm', 'pck_part_10.wasm', 'pck_part_11.wasm', 'pck_part_12.wasm', 'pck_part_13.wasm']
+    'index.pck': ['pck_part_0.wasm', 'pck_part_1.wasm', 'pck_part_2.wasm', 'pck_part_3.wasm', 'pck_part_4.wasm', 'pck_part_5.wasm', 'pck_part_6.wasm', 'pck_part_7.wasm', 'pck_part_8.wasm', 'pck_part_9.wasm', 'pck_part_10.wasm', 'pck_part_11.wasm', 'pck_part_12.wasm', 'pck_part_13.wasm', 'pck_part_14.wasm', 'pck_part_15.wasm', 'pck_part_16.wasm']
   };
-  var BUILD = '134';
-  var SIZES = { 'index.pck': 184600528, 'index.wasm': 39514754 };
+  var BUILD = '135';
+  var SIZES = { 'index.pck': 233901376, 'index.wasm': 39514754 };
   var TOTAL = SIZES['index.pck'] + SIZES['index.wasm'];
   var loaded = 0;
   var fill = document.getElementById('fill');
@@ -160,6 +176,7 @@ body {
     var pct = Math.min(100, Math.round(loaded / TOTAL * 100));
     fill.style.width = pct + '%';
     bar.setAttribute('aria-valuenow', String(pct));
+    document.getElementById('pct').textContent = pct + '%';
     status.textContent = 'Loading the mountain… ' + Math.round(loaded / 1e6) + ' of ' + Math.round(TOTAL / 1e6) + ' MB';
   }
 
@@ -221,7 +238,7 @@ body {
     ensureCrossOriginIsolationHeaders: false,
     executable: 'index',
     experimentalVK: false,
-    fileSizes: { 'index.pck': 184600528, 'index.wasm': 39514754 },
+    fileSizes: { 'index.pck': 233901376, 'index.wasm': 39514754 },
     focusCanvas: true,
     gdextensionLibs: []
   };
