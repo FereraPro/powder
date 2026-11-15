@@ -355,41 +355,53 @@ body {
       return dl.save({ filename: name, data: blob });
     }).catch(function () {});
   }
-  var recorder = null;
-  var recChunks = [];
-  var recType = '';
+  var recording = null;
+  function releaseCapture(session) {
+    if (session.stream) session.stream.getTracks().forEach(function (track) { track.stop(); });
+    if (recording === session) recording = null;
+  }
   window.__powderRecStart = function () {
+    if (recording) return false;
     var cv = document.getElementById('canvas');
     if (!cv || !cv.captureStream || typeof MediaRecorder === 'undefined') return false;
     var types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
-    recType = '';
+    var recType = '';
     for (var i = 0; i < types.length; i++) {
       if (MediaRecorder.isTypeSupported(types[i])) { recType = types[i]; break; }
     }
+    var session = { stream: null, recorder: null, chunks: [], base: '' };
     try {
-      recorder = new MediaRecorder(cv.captureStream(30), recType ? { mimeType: recType, videoBitsPerSecond: 6000000 } : undefined);
-    } catch (e) { recorder = null; return false; }
-    recChunks = [];
-    recorder.ondataavailable = function (e) { if (e.data && e.data.size) recChunks.push(e.data); };
-    recorder.start(250);
+      session.stream = cv.captureStream(30);
+      var r = new MediaRecorder(session.stream, recType ? { mimeType: recType, videoBitsPerSecond: 6000000 } : undefined);
+      session.recorder = r;
+      r.ondataavailable = function (e) { if (e.data && e.data.size) session.chunks.push(e.data); };
+      r.onstop = function () {
+        releaseCapture(session);
+        if (!session.base || !session.chunks.length) return;
+        var mime = r.mimeType || recType || session.chunks[0].type;
+        var ext = mime.indexOf('mp4') >= 0 ? '.mp4' : '.webm';
+        offerFile(session.base + ext, new Blob(session.chunks, { type: mime }));
+      };
+      r.onerror = function () { releaseCapture(session); };
+      r.start(250);
+      recording = session;
+    } catch (e) { releaseCapture(session); return false; }
     return true;
   };
   window.__powderRecStop = function (base) {
-    if (!recorder) return;
-    var r = recorder;
-    recorder = null;
-    r.onstop = function () {
-      if (!recChunks.length) return;
-      var ext = (r.mimeType || recType).indexOf('mp4') >= 0 ? '.mp4' : '.webm';
-      offerFile(base + ext, new Blob(recChunks));
-    };
-    r.stop();
+    if (!recording) return false;
+    var session = recording;
+    recording = null;
+    session.base = base;
+    try { session.recorder.stop(); }
+    catch (e) { releaseCapture(session); return false; }
+    return true;
   };
   window.__powderSavePng = function (b64, name) {
     var bin = atob(b64);
     var bytes = new Uint8Array(bin.length);
     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    offerFile(name, new Blob([bytes]));
+    offerFile(name, new Blob([bytes], { type: 'image/png' }));
   };
   function loadCloud() {
     if (!window.claude || !window.claude.use) return Promise.resolve(null);
