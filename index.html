@@ -164,8 +164,8 @@ body {
     'index.wasm': ['wasm_part_0.wasm', 'wasm_part_1.wasm', 'wasm_part_2.wasm'],
     'index.pck': ['pck_part_0.wasm', 'pck_part_1.wasm', 'pck_part_2.wasm', 'pck_part_3.wasm', 'pck_part_4.wasm', 'pck_part_5.wasm', 'pck_part_6.wasm', 'pck_part_7.wasm', 'pck_part_8.wasm', 'pck_part_9.wasm', 'pck_part_10.wasm', 'pck_part_11.wasm', 'pck_part_12.wasm', 'pck_part_13.wasm', 'pck_part_14.wasm']
   };
-  var BUILD = '163';
-  var SIZES = { 'index.pck': 205458704, 'index.wasm': 39514754 };
+  var BUILD = '164';
+  var SIZES = { 'index.pck': 205482028, 'index.wasm': 39514754 };
   var TOTAL = SIZES['index.pck'] + SIZES['index.wasm'];
   var loaded = 0;
   var fill = document.getElementById('fill');
@@ -238,7 +238,7 @@ body {
     ensureCrossOriginIsolationHeaders: false,
     executable: 'index',
     experimentalVK: false,
-    fileSizes: { 'index.pck': 205458704, 'index.wasm': 39514754 },
+    fileSizes: { 'index.pck': 205482028, 'index.wasm': 39514754 },
     focusCanvas: true,
     gdextensionLibs: []
   };
@@ -331,7 +331,22 @@ body {
     }).catch(function () { window.__powderBoards[tag] = JSON.stringify({ offline: true }); });
   };
   // Clips and photos: the game hands over a file, the viewer confirms the save.
+  // Outside claude.ai the file is handed over from a tap on a real page button: the
+  // share sheet and downloads need a fresh gesture, and a clip finishes seconds after the last tap.
   function offerFile(name, blob) {
+    if (window.claude && window.claude.use) return deliverFile(name, blob);
+    var old = document.getElementById('powder-save');
+    if (old) old.remove();
+    var btn = document.createElement('button');
+    btn.id = 'powder-save';
+    btn.textContent = 'TAP TO SAVE ' + (blob.type.indexOf('video') === 0 ? 'CLIP' : 'PICTURE');
+    btn.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;padding:16px 28px;border:0;border-radius:14px;background:#ffd23f;color:#111;font:700 20px sans-serif;box-shadow:0 4px 18px #0008';
+    var done = function () { clearTimeout(timer); btn.remove(); };
+    var timer = setTimeout(done, 60000);
+    btn.onclick = function () { done(); deliverFile(name, blob); };
+    document.body.appendChild(btn);
+  }
+  function deliverFile(name, blob) {
     if (!window.claude || !window.claude.use) {
       // Outside claude.ai: the share sheet (save to Photos on iPhone), else a download.
       var download = function () {
