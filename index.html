@@ -164,7 +164,7 @@ body {
     'index.wasm': ['wasm_part_0.wasm', 'wasm_part_1.wasm', 'wasm_part_2.wasm'],
     'index.pck': ['pck_part_0.wasm', 'pck_part_1.wasm', 'pck_part_2.wasm', 'pck_part_3.wasm', 'pck_part_4.wasm', 'pck_part_5.wasm', 'pck_part_6.wasm', 'pck_part_7.wasm', 'pck_part_8.wasm', 'pck_part_9.wasm', 'pck_part_10.wasm', 'pck_part_11.wasm', 'pck_part_12.wasm', 'pck_part_13.wasm', 'pck_part_14.wasm']
   };
-  var BUILD = '173';
+  var BUILD = '174';
   // Phones read ETC2/ASTC textures in hardware; desktop browsers do not, and decode them on the CPU (the page hangs).
   // Desktop gets a twin pck built with S3TC/BPTC. Any doubt -> the phone pck.
   try {
@@ -174,7 +174,7 @@ body {
     }
     if (gl && gl.getExtension('WEBGL_lose_context')) gl.getExtension('WEBGL_lose_context').loseContext();
   } catch (e) {}
-  var SIZES = { 'index.pck': 205530760, 'index.wasm': 39514754 };
+  var SIZES = { 'index.pck': 205534840, 'index.wasm': 39514754 };
   var TOTAL = SIZES['index.pck'] + SIZES['index.wasm'];
   var loaded = 0;
   var fill = document.getElementById('fill');
@@ -247,7 +247,7 @@ body {
     ensureCrossOriginIsolationHeaders: false,
     executable: 'index',
     experimentalVK: false,
-    fileSizes: { 'index.pck': 205530760, 'index.wasm': 39514754 },
+    fileSizes: { 'index.pck': 205534840, 'index.wasm': 39514754 },
     focusCanvas: true,
     gdextensionLibs: []
   };
